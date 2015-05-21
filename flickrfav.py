@@ -5,15 +5,20 @@ import os
 
 ENTRIES_PER_PAGE = 100
 
+
+class CannotDownload(Exception):
+    pass
+
+
 class Flickr(object):
     base_url = 'https://api.flickr.com/services/rest/'
+    SKIP = "skip"
 
     def __init__(self, api_key, user_id):
-        self.ids = {'api_key': api_key,
-                    'user_id': user_id,
-                    'format': 'json',
-                    'nojsoncallback': '1'
-                   }
+        self.api_key = api_key
+        self.user_id = user_id
+
+        self.ids = {'format': 'json', 'nojsoncallback': '1', }
 
     @staticmethod
     def find_stored_fav(path):
@@ -22,7 +27,8 @@ class Flickr(object):
         Those filenames with a 'z' prefix are stripped of the 'z'.
         Subdirectories are ignored.
         """
-        fav_path, fav_dirs, fav_files = os.walk(path)[0]
+        for fav_path, fav_dirs, fav_files in os.walk(path):
+            break
         stored_fav = [x.lstrip('z') if x.startswith('z') else x
                         for x in fav_files]
         return set(stored_fav)
@@ -35,19 +41,25 @@ class Flickr(object):
         params.update(self.ids)
         # need to pack by hand, and pass a string otherwise
         # the user_id get encoded with %25 instead of @
-        payload = '&'.join("%s=%s" % (k, v) for k, v in params.items())
+        payload = '&'.join("%s=%s" % (str(k), str(v)) 
+                                for k, v in params.items())
+        print "$$$$$", self.base_url, payload
         response = requests.get(self.base_url, params=payload)
         return response.json()
 
-    def get_img_url(img_entry):
+    def get_img_url(self, img_entry):
         photo_id = img_entry['id']
-        response = fv._getcmd_from_flickr(
-                                method='flickr.favorites.getInfo',
-                                photo_id=photo_id)
+        response = self._getcmd_from_flickr(
+                                method='flickr.photos.getInfo',
+                                photo_id=photo_id,
+                                api_key=self.api_key)
+        print "_____", response, "________"
         main_entry = response['photo']
+        if main_entry['usage']['candownload'] == 0:
+            return self.SKIP
+
         o_secret = main_entry['originalsecret']
         o_format = main_entry['originalformat']
-        
         return "https://farm%s.staticflickr.com/%s/%s_%s_o.%s" % (
                     img_entry['farm'],
                     img_entry['server'],
@@ -55,7 +67,7 @@ class Flickr(object):
                     o_secret,
                     o_format
                    )
-    
+        
     def get_current_flickr_fav(self, stored_fav):
         """return all my flickr fav
         as a dict = { id1: url1, id2: url2, ... }
@@ -67,7 +79,9 @@ class Flickr(object):
             response = fv._getcmd_from_flickr(
                                     method='flickr.favorites.getList',
                                     per_page=ENTRIES_PER_PAGE,
-                                    page=cur_page)
+                                    page=cur_page,
+                                    user_id=self.user_id,
+                                    api_key=self.api_key)
             main_entry = response['photos']
             cur_page = main_entry['page']
             pages = main_entry['pages']
@@ -77,7 +91,7 @@ class Flickr(object):
             all_entries.update(page_entries)
         return all_entries
  
-    def get_and_save_images(favs, path):
+    def download_images(favs, path):
         pass
 
     def add_new_favorites(self, path):
