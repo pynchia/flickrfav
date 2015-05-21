@@ -23,6 +23,8 @@ class Flickr(object):
 #        return url
     def get(self, **params):
         params.update(self.ids)
+        # need to pack by hand, and pass a string otherwise
+        # the user_id get encoded with %25 instead of @
         payload='&'.join("%s=%s" % (k,v) for k,v in params.items())
         r = requests.get(self.base_url, params=payload)
         return r
@@ -35,7 +37,7 @@ if __name__ == "__main__":
     fav_response = fv.get(method='flickr.favorites.getList', per_page=500)
     print "url=", fav_response.url
     print "Status code=", fav_response.status_code
-    print fav_response.text
-#    print fav_response.json()
+#    print fav_response.text
+    print fav_response.json()
 
 
