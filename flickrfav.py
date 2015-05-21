@@ -1,8 +1,9 @@
 #! /usr/bin/env python
 from sys import argv
 import requests
-# import os
+import os
 
+FAV_PATH = '/run/user/1000/gvfs/smb-share:server=tempest,share=flickr/Favorites'
 
 class Flickr(object):
     base_url = 'https://api.flickr.com/services/rest/'
@@ -14,30 +15,64 @@ class Flickr(object):
                     'nojsoncallback': '1'
                    }
 
-#    def encode_call(self, method, **params):
-#        url = self.base_url+method
-#        url += '&api_key=%s&user_id=%s' % (self.api_key, self.user_id)
-#        for p,v in params.items():
-#            url += '&%s=%s' % (p, v)
-#        url += '&format=json&nojsoncallback=1'
-#        return url
-    def get(self, **params):
+    @staticmethod
+    def find_stored_fav(path):
+        """return a set containing the filenames of the images already
+        stored locally in path (i.e. previously downloaded).
+        Those filenames with a 'z' prefix are stripped of the 'z'.
+        Subdirectories are ignored.
+        """
+        fav_path, fav_dirs, fav_files = os.walk(path)[0]
+        fav_in_stock = set(
+                    map(lambda x: x.lstrip('z') if x.startswith('z') else x,
+                        fav_files))
+        return fav_in_stock
+
+    def get_from_flickr(self, **params):
+        """issue the get command towards flickr
+        """
+        # add the basics
         params.update(self.ids)
         # need to pack by hand, and pass a string otherwise
         # the user_id get encoded with %25 instead of @
-        payload='&'.join("%s=%s" % (k,v) for k,v in params.items())
-        r = requests.get(self.base_url, params=payload)
-        return r
+        payload = '&'.join("%s=%s" % (k, v) for k, v in params.items())
+        response = requests.get(self.base_url, params=payload)
+        return response
+
+    @staticmethod
+    def get_all_flickr_fav(stored_fav):
+        """return all my flickr fav
+        as a dict = { id: url }
+        """
+        cur_page = '1'
+        while True:
+            response = fv.get_from_flickr(
+                                    method='flickr.favorites.getList',
+                                    per_page=500,
+                                    page=cur_page)
+            main_entry = response['photos']
+            cur_page = main_entry['page']
+            pages = main_entry['pages']
+            photos = main_entry['photo']
+            yield photos
+            if cur_page == pages:
+                break
+ 
+    def deduct_stored_fav(json_response, stored_fav):
+        """return the list of those images not downloaded yet
+        """
+        main_entry = json_response['photos']
+        
 
 if __name__ == "__main__":
     if len(argv) < 3:
         print "usage: %s api_key user_id" % (argv[0],)
         exit(1)
     fv = Flickr(argv[1], argv[2])
-    fav_response = fv.get(method='flickr.favorites.getList', per_page=500)
+
     print "url=", fav_response.url
     print "Status code=", fav_response.status_code
 #    print fav_response.text
-    print fav_response.json()
+    json = fav_response.json()
 
 
