@@ -3,7 +3,6 @@ from sys import argv
 import requests
 import os
 
-FAV_PATH = '/run/user/1000/gvfs/smb-share:server=tempest,share=flickr/Favorites'
 ENTRIES_PER_PAGE = 100
 
 class Flickr(object):
@@ -24,11 +23,11 @@ class Flickr(object):
         Subdirectories are ignored.
         """
         fav_path, fav_dirs, fav_files = os.walk(path)[0]
-        fav_in_stock = [x.lstrip('z') if x.startswith('z') else x
+        stored_fav = [x.lstrip('z') if x.startswith('z') else x
                         for x in fav_files]
-        return fav_in_stock
+        return set(stored_fav)
 
-    def get_from_flickr(self, **params):
+    def _getcmd_from_flickr(self, **params):
         """issue a generic get command towards flickr
         and return the json of the response
         """
@@ -42,7 +41,7 @@ class Flickr(object):
 
     def get_img_url(img_entry):
         photo_id = img_entry['id']
-        response = fv.get_from_flickr(
+        response = fv._getcmd_from_flickr(
                                 method='flickr.favorites.getInfo',
                                 photo_id=photo_id)
         main_entry = response['photo']
@@ -65,7 +64,7 @@ class Flickr(object):
         pages = 'X'
         all_entries = {}
         while cur_page != pages:
-            response = fv.get_from_flickr(
+            response = fv._getcmd_from_flickr(
                                     method='flickr.favorites.getList',
                                     per_page=ENTRIES_PER_PAGE,
                                     page=cur_page)
@@ -74,19 +73,30 @@ class Flickr(object):
             pages = main_entry['pages']
             photos = main_entry['photo']
             page_entries = {img['id']: self.get_img_url(img)
-                                                for img in photos}
+                            for img in photos if img['id'] not in stored_fav}
             all_entries.update(page_entries)
         return all_entries
  
-    def deduct_stored_fav(all_fav, stored_fav):
-        """return the list of those images not downloaded yet
+    def get_and_save_images(favs, path):
+        pass
+
+    def add_new_favorites(self, path):
+        """orchestrate the whole thing: retrieve the new fav images
+        and save them to the path
         """
-        main_entry = json_response['photos']
-        
+        stored_fav = self.find_stored_fav(path)
+        print "*** found %d stored favs ***" % len(stored_fav)
+        flickr_fav = self.get_current_flickr_fav(stored_fav)
+        print "--- %d new favs to fetch ---" % len(flickr_fav)
+        self.get_and_save_images(flickr_fav, path)
+
 
 if __name__ == "__main__":
     if len(argv) < 3:
         print "usage: %s api_key user_id" % (argv[0],)
         exit(1)
     fv = Flickr(argv[1], argv[2])
+    FAV_PATH = '/run/user/1000/gvfs/smb-share:server=tempest,share=flickr/Favorites'
+    fv.add_new_favorites(FAV_PATH)
+
 
