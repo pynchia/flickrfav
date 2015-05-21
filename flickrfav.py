@@ -24,13 +24,13 @@ class Flickr(object):
         Subdirectories are ignored.
         """
         fav_path, fav_dirs, fav_files = os.walk(path)[0]
-        fav_in_stock = set(
-                    map(lambda x: x.lstrip('z') if x.startswith('z') else x,
-                        fav_files))
+        fav_in_stock = [x.lstrip('z') if x.startswith('z') else x
+                        for x in fav_files]
         return fav_in_stock
 
     def get_from_flickr(self, **params):
-        """issue the get command towards flickr
+        """issue a generic get command towards flickr
+        and return the json of the response
         """
         # add the basics
         params.update(self.ids)
@@ -38,7 +38,7 @@ class Flickr(object):
         # the user_id get encoded with %25 instead of @
         payload = '&'.join("%s=%s" % (k, v) for k, v in params.items())
         response = requests.get(self.base_url, params=payload)
-        return response
+        return response.json()
 
     def get_img_url(img_entry):
         photo_id = img_entry['id']
@@ -55,7 +55,7 @@ class Flickr(object):
                     photo_id,
                     o_secret,
                     o_format
-                 )
+                   )
     
     def get_current_flickr_fav(self, stored_fav):
         """return all my flickr fav
@@ -78,7 +78,7 @@ class Flickr(object):
             all_entries.update(page_entries)
         return all_entries
  
-    def deduct_stored_fav(json_response, stored_fav):
+    def deduct_stored_fav(all_fav, stored_fav):
         """return the list of those images not downloaded yet
         """
         main_entry = json_response['photos']
@@ -89,10 +89,4 @@ if __name__ == "__main__":
         print "usage: %s api_key user_id" % (argv[0],)
         exit(1)
     fv = Flickr(argv[1], argv[2])
-
-    print "url=", fav_response.url
-    print "Status code=", fav_response.status_code
-#    print fav_response.text
-    json = fav_response.json()
-
 
