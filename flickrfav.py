@@ -41,11 +41,25 @@ class Flickr(object):
         return response
 
     def get_img_url(img_entry):
-        pass
+        photo_id = img_entry['id']
+        response = fv.get_from_flickr(
+                                method='flickr.favorites.getInfo',
+                                photo_id=photo_id)
+        main_entry = response['photo']
+        o_secret = main_entry['originalsecret']
+        o_format = main_entry['originalformat']
+        
+        return "https://farm%s.staticflickr.com/%s/%s_%s_o.%s" % (
+                    img_entry['farm'],
+                    img_entry['server'],
+                    photo_id,
+                    o_secret,
+                    o_format
+                 )
     
-    def get_all_flickr_fav(self, stored_fav):
+    def get_current_flickr_fav(self, stored_fav):
         """return all my flickr fav
-        as an iterable of dict = { id: url }
+        as a dict = { id1: url1, id2: url2, ... }
         """
         cur_page = '1'
         pages = 'X'
