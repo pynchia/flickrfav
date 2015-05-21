@@ -4,6 +4,7 @@ import requests
 import os
 
 FAV_PATH = '/run/user/1000/gvfs/smb-share:server=tempest,share=flickr/Favorites'
+ENTRIES_PER_PAGE = 100
 
 class Flickr(object):
     base_url = 'https://api.flickr.com/services/rest/'
@@ -39,24 +40,29 @@ class Flickr(object):
         response = requests.get(self.base_url, params=payload)
         return response
 
-    @staticmethod
-    def get_all_flickr_fav(stored_fav):
+    def get_img_url(img_entry):
+        pass
+    
+    def get_all_flickr_fav(self, stored_fav):
         """return all my flickr fav
-        as a dict = { id: url }
+        as an iterable of dict = { id: url }
         """
         cur_page = '1'
-        while True:
+        pages = 'X'
+        all_entries = {}
+        while cur_page != pages:
             response = fv.get_from_flickr(
                                     method='flickr.favorites.getList',
-                                    per_page=500,
+                                    per_page=ENTRIES_PER_PAGE,
                                     page=cur_page)
             main_entry = response['photos']
             cur_page = main_entry['page']
             pages = main_entry['pages']
             photos = main_entry['photo']
-            yield photos
-            if cur_page == pages:
-                break
+            page_entries = {img['id']: self.get_img_url(img)
+                                                for img in photos}
+            all_entries.update(page_entries)
+        return all_entries
  
     def deduct_stored_fav(json_response, stored_fav):
         """return the list of those images not downloaded yet
