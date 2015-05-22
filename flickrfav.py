@@ -2,12 +2,9 @@
 from sys import argv
 import requests
 import os
+import shutil
 
 ENTRIES_PER_PAGE = 100
-
-
-class CannotDownload(Exception):
-    pass
 
 
 class Flickr(object):
@@ -43,7 +40,7 @@ class Flickr(object):
         # the user_id get encoded with %25 instead of @
         payload = '&'.join("%s=%s" % (str(k), str(v)) 
                                 for k, v in params.items())
-        print "$$$$$", self.base_url, payload
+        print self.base_url, payload
         response = requests.get(self.base_url, params=payload)
         return response.json()
 
@@ -53,7 +50,7 @@ class Flickr(object):
                                 method='flickr.photos.getInfo',
                                 photo_id=photo_id,
                                 api_key=self.api_key)
-        print "_____", response, "________"
+        # print "_____", response, "________"
         main_entry = response['photo']
         if main_entry['usage']['candownload'] == 0:
             return self.SKIP
@@ -72,10 +69,11 @@ class Flickr(object):
         """return all my flickr fav
         as a dict = { id1: url1, id2: url2, ... }
         """
-        cur_page = '1'
-        pages = 'X'
+        cur_page = 0
+        pages = -1
         all_entries = {}
         while cur_page != pages:
+            cur_page += 1
             response = fv._getcmd_from_flickr(
                                     method='flickr.favorites.getList',
                                     per_page=ENTRIES_PER_PAGE,
@@ -83,7 +81,6 @@ class Flickr(object):
                                     user_id=self.user_id,
                                     api_key=self.api_key)
             main_entry = response['photos']
-            cur_page = main_entry['page']
             pages = main_entry['pages']
             photos = main_entry['photo']
             page_entries = {img['id']: self.get_img_url(img)
@@ -91,26 +88,47 @@ class Flickr(object):
             all_entries.update(page_entries)
         return all_entries
  
-    def download_images(favs, path):
-        pass
+    def download_images(self, favs, dest_path):
+        """download the given favorite images from flickr
+        skipping the ones lacking permission to do so.
+        Return the number of skipped images.
+        """
+        print "DDD Downloading new favs"
+        num_skipped = 0
+        for photo_id, url in favs.items():
+            if url == self.SKIP:
+                print self.SKIP, photo_id
+                num_skipped += 1
+                continue
+            response = requests.get(url, stream=True)
+            if response.status_code == 200:
+                fname = dest_path+photo_id+url[-4:]
+                print fname
+                with open(fname, 'wb') as img_file:
+                    response.raw.decode_content = True
+                    shutil.copyfileobj(response.raw, img_file)
+        return num_skipped
 
-    def add_new_favorites(self, path):
+    def add_new_favorites(self, source_path, dest_path):
         """orchestrate the whole thing: retrieve the new fav images
         and save them to the path
         """
-        stored_fav = self.find_stored_fav(path)
+        stored_fav = self.find_stored_fav(source_path)
         print "*** found %d stored favs ***" % len(stored_fav)
+
         flickr_fav = self.get_current_flickr_fav(stored_fav)
         print "--- %d new favs to fetch ---" % len(flickr_fav)
-        self.get_and_save_images(flickr_fav, path)
+
+        num_skipped = self.download_images(flickr_fav, dest_path)
+        print "sss skipped %d images due to permission" % num_skipped
 
 
 if __name__ == "__main__":
-    if len(argv) < 3:
-        print "usage: %s api_key user_id" % (argv[0],)
+    if len(argv) <= 4:
+        print "usage: %s api_key user_id sourcepath dest_path" % (argv[0],)
         exit(1)
     fv = Flickr(argv[1], argv[2])
-    FAV_PATH = '/run/user/1000/gvfs/smb-share:server=tempest,share=flickr/Favorites'
-    fv.add_new_favorites(FAV_PATH)
+    # FAV_PATH = '/run/user/1000/gvfs/smb-share:server=tempest,share=flickr/Favorites'
+    fv.add_new_favorites(argv[3], argv[4])
 
 
