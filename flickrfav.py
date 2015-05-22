@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+from __future__ import unicode_literals
 from sys import argv
 import requests
 import os
@@ -26,8 +27,12 @@ class Flickr(object):
         """
         for fav_path, fav_dirs, fav_files in os.walk(path):
             break
-        stored_fav = [x.lstrip('z') if x.startswith('z') else x
+        stored_fav = [x.lstrip('z')[:-4] if x.startswith('z') else x[:-4]
                         for x in fav_files]
+        print "---SSS Stored favs:"
+        for s in stored_fav:
+            print s
+
         return set(stored_fav)
 
     def _getcmd_from_flickr(self, **params):
@@ -50,7 +55,7 @@ class Flickr(object):
                                 method='flickr.photos.getInfo',
                                 photo_id=photo_id,
                                 api_key=self.api_key)
-        # print "_____", response, "________"
+        #print "_____", response, "________"
         main_entry = response['photo']
         if main_entry['usage']['candownload'] == 0:
             return self.SKIP
@@ -65,7 +70,7 @@ class Flickr(object):
                     o_format
                    )
         
-    def get_current_flickr_fav(self, stored_fav):
+    def get_new_flickr_fav(self, stored_fav):
         """return all my flickr fav
         as a dict = { id1: url1, id2: url2, ... }
         """
@@ -83,9 +88,17 @@ class Flickr(object):
             main_entry = response['photos']
             pages = main_entry['pages']
             photos = main_entry['photo']
-            page_entries = {img['id']: self.get_img_url(img)
-                            for img in photos if img['id'] not in stored_fav}
-            all_entries.update(page_entries)
+            #page_entries = {img['id']: self.get_img_url(img)
+            #                for img in photos if img['id'] not in stored_fav}
+            #all_entries.update(page_entries)
+            for img in photos:
+                photo_id = img['id']
+                if photo_id.encode('utf-8') not in stored_fav:
+                    all_entries[photo_id] = self.get_img_url(img)
+                    print "NNN new id", photo_id
+                else:
+                    print ">>> stored already", photo_id
+        # print "--- favs stripped of stored:", all_entries
         return all_entries
  
     def download_images(self, favs, dest_path):
@@ -93,7 +106,7 @@ class Flickr(object):
         skipping the ones lacking permission to do so.
         Return the number of skipped images.
         """
-        print "DDD Downloading new favs"
+        print '---DDD Downloading new favs'
         num_skipped = 0
         for photo_id, url in favs.items():
             if url == self.SKIP:
@@ -114,13 +127,13 @@ class Flickr(object):
         and save them to the path
         """
         stored_fav = self.find_stored_fav(source_path)
-        print "*** found %d stored favs ***" % len(stored_fav)
+        print "--- found %d stored favs ***" % len(stored_fav)
 
-        flickr_fav = self.get_current_flickr_fav(stored_fav)
+        flickr_fav = self.get_new_flickr_fav(stored_fav)
         print "--- %d new favs to fetch ---" % len(flickr_fav)
 
         num_skipped = self.download_images(flickr_fav, dest_path)
-        print "sss skipped %d images due to permission" % num_skipped
+        print "--- skipped %d images due to permission" % num_skipped
 
 
 if __name__ == "__main__":
