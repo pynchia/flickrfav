@@ -29,10 +29,9 @@ class Flickr(object):
             break
         stored_fav = [x.lstrip('z')[:-4] if x.startswith('z') else x[:-4]
                         for x in fav_files]
-        print "---SSS Stored favs:"
-        for s in stored_fav:
-            print s
-
+        #print "---SSS Stored favs:"
+        #for s in stored_fav:
+        #    print s
         return set(stored_fav)
 
     def _getcmd_from_flickr(self, **params):
@@ -74,6 +73,7 @@ class Flickr(object):
         """return all my flickr fav
         as a dict = { id1: url1, id2: url2, ... }
         """
+        print '---FFF discovering favs'
         cur_page = 0
         pages = -1
         all_entries = {}
@@ -106,7 +106,7 @@ class Flickr(object):
         skipping the ones lacking permission to do so.
         Return the number of skipped images.
         """
-        print '---DDD Downloading new favs'
+        print '---DDD downloading new favs'
         num_skipped = 0
         for photo_id, url in favs.items():
             if url == self.SKIP:
