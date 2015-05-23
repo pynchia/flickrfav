@@ -8,27 +8,34 @@ import shutil
 ENTRIES_PER_PAGE = 100
 
 
+class Disallowed(Exception):
+    pass
+
 class Flickr(object):
     base_url = 'https://api.flickr.com/services/rest/'
     SKIP = "skip"
 
-    def __init__(self, api_key, user_id):
-        self.api_key = api_key
+    def __init__(self, api_key, user_id, prefix, source_path, dest_path):
         self.user_id = user_id
+        self.prefix = prefix
+        self.source_path = source_path
+        self.dest_path = dest_path
 
-        self.ids = {'format': 'json', 'nojsoncallback': '1', }
+        # std common params for flickr commands
+        self.std_params = {'api_key': api_key,
+                           'format': 'json',
+                           'nojsoncallback': '1', }
 
-    @staticmethod
-    def find_stored_fav(path):
+    def find_stored_fav(self):
         """return a set containing the filenames of the images already
         stored locally in path (i.e. previously downloaded).
-        Those filenames with a 'z' prefix are stripped of the 'z'.
+        Filenames are stripped of the given prefix if they have one.
         Subdirectories are ignored.
         """
-        for fav_path, fav_dirs, fav_files in os.walk(path):
+        print "--- find stored favs ---"
+        for fav_path, fav_dirs, fav_files in os.walk(self.source_path):
             break
-        stored_fav = [x.lstrip('z')[:-4] if x.startswith('z') else x[:-4]
-                        for x in fav_files]
+        stored_fav = [x.lstrip(self.prefix)[:-4] for x in fav_files]
         #print "---SSS Stored favs:"
         #for s in stored_fav:
         #    print s
@@ -38,8 +45,8 @@ class Flickr(object):
         """issue a generic get command towards flickr
         and return the json of the response
         """
-        # add the basics
-        params.update(self.ids)
+        # add the standard params
+        params.update(self.std_params)
         # need to pack by hand, and pass a string otherwise
         # the user_id get encoded with %25 instead of @
         payload = '&'.join("%s=%s" % (str(k), str(v)) 
@@ -52,12 +59,12 @@ class Flickr(object):
         photo_id = img_entry['id']
         response = self._getcmd_from_flickr(
                                 method='flickr.photos.getInfo',
-                                photo_id=photo_id,
-                                api_key=self.api_key)
+                                photo_id=photo_id)
         #print "_____", response, "________"
         main_entry = response['photo']
         if main_entry['usage']['candownload'] == 0:
-            return self.SKIP
+            raise Disallowed('download disallowed for image %s' % photo_id)
+            #return self.SKIP
 
         o_secret = main_entry['originalsecret']
         o_format = main_entry['originalformat']
@@ -72,76 +79,86 @@ class Flickr(object):
     def get_new_flickr_fav(self, stored_fav):
         """return all my flickr fav
         as a dict = { id1: url1, id2: url2, ... }
+        skipping the ones which have been stored (i.e. downloaded already)
+        and the ones which are protected by flickr (i.e. download not perm.)
         """
-        print '---FFF discovering favs'
+        print '--- discovering favs'
         cur_page = 0
         pages = -1
-        all_entries = {}
+        new_favs = {}
+        num_disallowed = 0
         while cur_page != pages:
             cur_page += 1
             response = fv._getcmd_from_flickr(
                                     method='flickr.favorites.getList',
                                     per_page=ENTRIES_PER_PAGE,
                                     page=cur_page,
-                                    user_id=self.user_id,
-                                    api_key=self.api_key)
+                                    user_id=self.user_id)
             main_entry = response['photos']
             pages = main_entry['pages']
             photos = main_entry['photo']
-            #page_entries = {img['id']: self.get_img_url(img)
-            #                for img in photos if img['id'] not in stored_fav}
-            #all_entries.update(page_entries)
             for img in photos:
                 photo_id = img['id']
                 if photo_id.encode('utf-8') not in stored_fav:
-                    all_entries[photo_id] = self.get_img_url(img)
-                    print "NNN new id", photo_id
-                else:
-                    print ">>> stored already", photo_id
-        # print "--- favs stripped of stored:", all_entries
-        return all_entries
+                    try:
+                        url = self.get_img_url(img)
+                    except Disallowed:
+                        num_disallowed += 1
+                    else:
+                    # image can be downloaded
+                        new_favs[photo_id] = url
+                    #    print "NNN new id", photo_id
+                #else:
+                #    print photo_id, "stored already"
+        return new_favs, num_disallowed
  
-    def download_images(self, favs, dest_path):
+    def download_images(self, favs):
         """download the given favorite images from flickr
         skipping the ones lacking permission to do so.
         Return the number of skipped images.
         """
-        print '---DDD downloading new favs'
-        num_skipped = 0
+        print '--- downloading new favs'
+        num_downloaded = 0
+        num_errors = 0
         for photo_id, url in favs.items():
-            if url == self.SKIP:
-                print self.SKIP, photo_id
-                num_skipped += 1
-                continue
             response = requests.get(url, stream=True)
             if response.status_code == 200:
-                fname = dest_path+photo_id+url[-4:]
-                print fname
+                fname = self.dest_path+photo_id+url[-4:]
+                #print fname
                 with open(fname, 'wb') as img_file:
                     response.raw.decode_content = True
                     shutil.copyfileobj(response.raw, img_file)
-        return num_skipped
+                num_downloaded += 1
+            else:
+                print "ERROR bad response from flickr:", response.status_code
+                num_errors += 1
+        return num_downloaded, num_errors
 
-    def add_new_favorites(self, source_path, dest_path):
+    def add_new_favorites(self):
         """orchestrate the whole thing: retrieve the new fav images
         and save them to the path
         """
-        stored_fav = self.find_stored_fav(source_path)
-        print "--- found %d stored favs ***" % len(stored_fav)
+        stored_favs = self.find_stored_favs()
+        print "--- %d stored favs" % len(stored_favs)
 
-        flickr_fav = self.get_new_flickr_fav(stored_fav)
-        print "--- %d new favs to fetch ---" % len(flickr_fav)
+        new_favs, num_disallowed = self.get_new_flickr_fav(stored_favs)
+        print "--- %d new favs to fetch, %d disallowed" % \
+                                (len(new_favs), num_disallowed)
 
-        num_skipped = self.download_images(flickr_fav, dest_path)
-        print "--- skipped %d images due to permission" % num_skipped
+        num_downloaded, num_errors = self.download_images(new_favs)
+        print "--- %d downloaded, %d errors" % (num_downloaded, num_errors)
 
 
 if __name__ == "__main__":
-    if len(argv) <= 4:
-        print "usage: %s api_key user_id sourcepath dest_path" % (argv[0],)
+    if len(argv) <= 5:
+        print "usage: %s api_key user_id prefix sourcepath dest_path" % (argv[0],)
         exit(1)
-    fv = Flickr(argv[1], argv[2])
+    fv = Flickr(api_key=argv[1],
+                user_id=argv[2],
+                prefix=argv[3],
+                source_path=argv[4],
+                dest_path=argv[5])
+    # sample source_path for windows shared folder
     # FAV_PATH = '/run/user/1000/gvfs/smb-share:server=tempest,share=flickr/Favorites'
-    fv.add_new_favorites(argv[3], argv[4])
-
+    fv.add_new_favorites()
 
