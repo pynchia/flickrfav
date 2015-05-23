@@ -8,13 +8,8 @@ import shutil
 ENTRIES_PER_PAGE = 100
 
 
-class Disallowed(Exception):
-    pass
-
-
 class FlickrFav(object):
-    base_url = 'https://api.flickr.com/services/rest/'
-    SKIP = "skip"
+    base_url = 'https://api.flickr.com/services/rest/?'
 
     def __init__(self, api_key, user_id, prefix, source_path, dest_path):
         self.user_id = user_id
@@ -63,18 +58,20 @@ class FlickrFav(object):
                                 photo_id=photo_id)
         #print "_____", response, "________"
         main_entry = response['photo']
-        if main_entry['usage']['candownload'] == 0:
-            raise Disallowed('download disallowed for image %s' % photo_id)
-            #return self.SKIP
-
-        o_secret = main_entry['originalsecret']
-        o_format = main_entry['originalformat']
-        return "https://farm%s.staticflickr.com/%s/%s_%s_o.%s" % (
-                    img_entry['farm'],
-                    img_entry['server'],
-                    photo_id,
-                    o_secret,
-                    o_format)
+        if main_entry['usage']['candownload'] == 1:
+            return "https://farm%s.staticflickr.com/%s/%s_%s_o.%s" % (
+                        img_entry['farm'],
+                        img_entry['server'],
+                        photo_id,
+                        main_entry['originalsecret'],
+                        main_entry['originalformat'])
+        else:
+            # original is disallowed, so use plain format
+            return "https://farm%s.staticflickr.com/%s/%s_%s.jpg" % (
+                        img_entry['farm'],
+                        img_entry['server'],
+                        photo_id,
+                        main_entry['secret'])
 
     def _get_new_flickr_favs(self, stored_fav):
         """return all my flickr fav
@@ -86,7 +83,6 @@ class FlickrFav(object):
         cur_page = 0
         pages = -1
         new_favs = {}
-        num_disallowed = 0
         while cur_page != pages:
             cur_page += 1
             response = self._getcmd_from_flickr(
@@ -100,17 +96,12 @@ class FlickrFav(object):
             for img in photos:
                 photo_id = img['id']
                 if photo_id.encode('utf-8') not in stored_fav:
-                    try:
-                        url = self._get_img_url(img)
-                    except Disallowed:
-                        num_disallowed += 1
-                    else:
-                    # image can be downloaded
-                        new_favs[photo_id] = url
-                    #    print "NNN new id", photo_id
+                    url = self._get_img_url(img)
+                    new_favs[photo_id] = url
+                #    print "NNN new id", photo_id
                 #else:
                 #    print photo_id, "stored already"
-        return new_favs, num_disallowed
+        return new_favs
  
     def _download_images(self, favs):
         """download the given favorite images from flickr
@@ -121,6 +112,7 @@ class FlickrFav(object):
         num_downloaded = 0
         num_errors = 0
         for photo_id, url in favs.items():
+            print url
             response = requests.get(url, stream=True)
             if response.status_code == 200:
                 fname = self.dest_path+photo_id+url[-4:]
@@ -143,10 +135,8 @@ class FlickrFav(object):
         stored_favs = self._find_stored_favs()
         print "*** %d stored favs found" % len(stored_favs)
 
-        new_favs, num_disallowed = self._get_new_flickr_favs(stored_favs)
-        print "*** %d new favs allowed, %d disallowed" % (
-                                        len(new_favs),
-                                        num_disallowed)
+        new_favs = self._get_new_flickr_favs(stored_favs)
+        print "*** %d new favs" % len(new_favs)
 
         num_downloaded, num_errors = self._download_images(new_favs)
         print "*** %d images downloaded, %d errors" % (
