@@ -9,7 +9,7 @@ ENTRIES_PER_PAGE = 100
 
 
 class FlickrFav(object):
-    base_url = 'https://api.flickr.com/services/rest/?'
+    base_url = 'https://api.flickr.com/services/rest/'
 
     def __init__(self, api_key, user_id, prefix, source_path, dest_path):
         self.user_id = user_id
@@ -66,12 +66,50 @@ class FlickrFav(object):
                         main_entry['originalsecret'],
                         main_entry['originalformat'])
         else:
-            # original is disallowed, so use plain format
-            return "https://farm%s.staticflickr.com/%s/%s_%s.jpg" % (
-                        img_entry['farm'],
-                        img_entry['server'],
-                        photo_id,
-                        main_entry['secret'])
+            # original is disallowed, so let's try something else
+            base_url4img = 'https://farm%s.staticflickr.com/%s/%s_' % (
+                                img_entry['farm'],
+                                img_entry['server'],
+                                photo_id)
+            img_path_alias = main_entry['owner']['path_alias']
+            url4sizes = 'https://www.flickr.com/photos/%s/%s/sizes/k/' % (
+                    img_path_alias,
+                    photo_id)
+            print "*** Original disallowed, try k size (2048px)", url4sizes
+            response = requests.get(url4sizes)
+            if response.status_code == 200:
+                # flickr gives a page with the highest available size
+                # look for the url of the image in the page
+                __, _, tail = response.text.partition(base_url4img)
+                #ignore the first one, get the second match
+                __, _, tail = tail.partition(base_url4img)
+                #print "tail=", tail.encode('utf-8)
+                very_secret_suffix = '_k.jpg'
+                very_secret_len = tail.find(very_secret_suffix)
+                if very_secret_len == -1:
+                    # it's not a k size, try with the b size (1024px)
+                    print "*** no k size, try b size (1024px)"
+                    very_secret_suffix = '_b.jpg'
+                    very_secret_len = tail.find(very_secret_suffix)
+                    if very_secret_len == -1:
+                        print "*** no b size available either"
+
+                # extract the very_secret
+                #print "very_secret_pos=", very_secret_pos
+                if very_secret_len >= 0:
+                    very_secret = tail[:very_secret_len]
+                    #print "UUU"
+                    #print base_url4img
+                    #print very_secret.encode('utf-8')
+                    #print very_secret
+                    #print very_secret_suffix
+                    return base_url4img+very_secret+very_secret_suffix
+            else:
+                print "ERROR getting the sizes page", photo_id
+
+            # nothing works, so fall back to the std plain image format
+            print "*** fall back to std size, whatever it is"
+            return base_url4img+main_entry['secret']+'.jpg'
 
     def _get_new_flickr_favs(self, stored_fav):
         """return all my flickr fav
