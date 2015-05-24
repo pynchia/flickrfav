@@ -11,14 +11,14 @@ ENTRIES_PER_PAGE = 100
 class FlickrFav(object):
     base_url = 'https://api.flickr.com/services/rest/'
 
-    def __init__(self, api_key, user_id, prefix, source_path, dest_path):
+    def __init__(self, user_id, prefix, source_path, dest_path):
         self.user_id = user_id
         self.prefix = prefix
         self.source_path = source_path
         self.dest_path = dest_path
 
         # std common params for flickr commands
-        self.std_params = {'api_key': api_key,
+        self.std_params = {'api_key': '6b0fe9ff060d2b8060a13af5024fa0da',
                            'format': 'json',
                            'nojsoncallback': '1', }
 
@@ -153,7 +153,7 @@ class FlickrFav(object):
             print url
             response = requests.get(url, stream=True)
             if response.status_code == 200:
-                fname = self.dest_path+photo_id+url[-4:]
+                fname = os.path.join(self.dest_path, photo_id+url[-4:])
                 #print fname
                 with open(fname, 'wb') as img_file:
                     response.raw.decode_content = True
@@ -182,13 +182,12 @@ class FlickrFav(object):
                                         num_errors)
 
 if __name__ == "__main__":
-    if len(argv) <= 5:
-        print "usage: %s api_key user_id prefix sourcepath dest_path" % (argv[0],)
+    if len(argv) <= 4:
+        print "usage: %s user_id prefix source_path dest_path" % (argv[0],)
         exit(1)
-    ff = FlickrFav(api_key=argv[1],
-                   user_id=argv[2],
-                   prefix=argv[3],
-                   source_path=argv[4],
-                   dest_path=argv[5])
+    ff = FlickrFav(user_id=argv[1],
+                   prefix=argv[2],
+                   source_path=argv[3],
+                   dest_path=argv[4])
     ff.add_new_favorites()
 
