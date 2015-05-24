@@ -19,3 +19,4 @@ Usage: ./flickrfav.py user_id prefix source_path dest_path
 
         dest_path = the directory where the new fetched images will be saved. It can be the same as source_path.
 
+Have fun!

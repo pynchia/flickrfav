@@ -1,4 +1,9 @@
 #! /usr/bin/env python
+"""
+A utility to download new favorites from Flickr and merge them with local ones
+Authored by MBB (pynchia@gmail.com)
+Please keep my name in the code, which is free for any conceivable use.
+"""
 from __future__ import unicode_literals
 from sys import argv
 import requests
