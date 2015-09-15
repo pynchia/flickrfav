@@ -3,6 +3,7 @@
 A utility to download new favorites from Flickr and merge them with local ones
 Authored by MBB (pynchia@gmail.com)
 Please keep my name in the code, which is free for any conceivable use.
+However, please create and use your own flickr account and api key. Thank you.
 """
 from __future__ import unicode_literals
 from sys import argv
