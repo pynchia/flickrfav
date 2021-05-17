@@ -34,7 +34,7 @@ class FlickrFav(object):
         Filenames are stripped of the given prefix if they have one.
         Subdirectories are ignored.
         """
-        print "--- find stored favs ---"
+        print("--- find stored favs ---")
         for fav_path, fav_dirs, fav_files in os.walk(self.source_path):
             break
         stored_favs = [x.lstrip(self.prefix)[:-4] for x in fav_files]
@@ -53,7 +53,7 @@ class FlickrFav(object):
         # the user_id gets encoded with %25 instead of @
         payload = '&'.join("%s=%s" % (str(k), str(v)) 
                                 for k, v in params.items())
-        print self.base_url, payload
+        print(self.base_url, payload)
         response = requests.get(self.base_url, params=payload)
         return response.json()
 
@@ -81,7 +81,7 @@ class FlickrFav(object):
             url4sizes = 'https://www.flickr.com/photos/%s/%s/sizes/k/' % (
                     img_path_alias,
                     photo_id)
-            print "*** Original disallowed, try k size (2048px)", url4sizes
+            print("*** Original disallowed, try k size (2048px)", url4sizes)
             response = requests.get(url4sizes)
             if response.status_code == 200:
                 # flickr gives a page with the highest available size
@@ -94,11 +94,11 @@ class FlickrFav(object):
                 very_secret_len = tail.find(very_secret_suffix)
                 if very_secret_len == -1:
                     # it's not a k size, try with the b size (1024px)
-                    print "*** no k size, try b size (1024px)"
+                    print("*** no k size, try b size (1024px)")
                     very_secret_suffix = '_b.jpg'
                     very_secret_len = tail.find(very_secret_suffix)
                     if very_secret_len == -1:
-                        print "*** no b size available either"
+                        print("*** no b size available either")
 
                 # extract the very_secret
                 #print "very_secret_pos=", very_secret_pos
@@ -111,10 +111,10 @@ class FlickrFav(object):
                     #print very_secret_suffix
                     return base_url4img+very_secret+very_secret_suffix
             else:
-                print "ERROR getting the sizes page", photo_id
+                print("ERROR getting the sizes page", photo_id)
 
             # nothing works, so fall back to the std plain image format
-            print "*** fall back to std size, whatever it is"
+            print("*** fall back to std size, whatever it is")
             return base_url4img+main_entry['secret']+'.jpg'
 
     def _get_new_flickr_favs(self, stored_fav):
@@ -123,7 +123,7 @@ class FlickrFav(object):
         skipping the ones which have been stored (i.e. downloaded already)
         and the ones which are protected by flickr (i.e. download not perm.)
         """
-        print '--- discovering favs'
+        print('--- discovering favs')
         cur_page = 0
         pages = -1
         new_favs = {}
@@ -152,11 +152,11 @@ class FlickrFav(object):
         skipping the ones lacking permission to do so.
         Return the number of skipped images.
         """
-        print '--- downloading new favs'
+        print('--- downloading new favs')
         num_downloaded = 0
         num_errors = 0
         for photo_id, url in favs.items():
-            print url
+            print(url)
             response = requests.get(url, stream=True)
             if response.status_code == 200:
                 fname = os.path.join(self.dest_path, photo_id+url[-4:])
@@ -166,7 +166,7 @@ class FlickrFav(object):
                     shutil.copyfileobj(response.raw, img_file)
                 num_downloaded += 1
             else:
-                print "ERROR bad response from flickr:", response.status_code
+                print("ERROR bad response from flickr:", response.status_code)
                 num_errors += 1
         return num_downloaded, num_errors
 
@@ -177,19 +177,19 @@ class FlickrFav(object):
         c) save them to the path
         """
         stored_favs = self._find_stored_favs()
-        print "*** %d stored favs found" % len(stored_favs)
+        print("*** %d stored favs found" % len(stored_favs))
 
         new_favs = self._get_new_flickr_favs(stored_favs)
-        print "*** %d new favs" % len(new_favs)
+        print("*** %d new favs" % len(new_favs))
 
         num_downloaded, num_errors = self._download_images(new_favs)
-        print "*** %d images downloaded, %d errors" % (
+        print("*** %d images downloaded, %d errors" % (
                                         num_downloaded,
-                                        num_errors)
+                                        num_errors))
 
 if __name__ == "__main__":
     if len(argv) <= 4:
-        print "usage: %s user_id prefix source_path dest_path" % (argv[0],)
+        print("usage: %s user_id prefix source_path dest_path" % (argv[0],))
         exit(1)
     ff = FlickrFav(user_id=argv[1],
                    prefix=argv[2],

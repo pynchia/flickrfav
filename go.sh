@@ -1,7 +1,6 @@
 #!/bin/bash
 # launch flickrfav
-#SRCPATH='Favorites/'
-SRCPATH='/run/user/1000/gvfs/smb-share:server=tempest,share=flickr/Favorites/'
+SRCPATH='/media/favorites/'
 DSTPATH=$SRCPATH'Download/'
 echo $SRCPATH
 echo $DSTPATH
